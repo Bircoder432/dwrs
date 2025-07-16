@@ -1,5 +1,5 @@
 [package]
-name = "dwrs"
+name = "dwrs-sync"
 version = "0.1.2-sync"
 authors = ["vadim rofeds12345@gmail.com"]
 edition = "2024"

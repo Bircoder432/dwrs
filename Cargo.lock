@@ -278,7 +278,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dwrs"
+name = "dwrs-sync"
 version = "0.1.2-sync"
 dependencies = [
  "clap",
