@@ -1,68 +1,59 @@
-// System and library imports
-use std::path::PathBuf;
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use once_cell::sync::Lazy;               // For lazy static initialization
-use rust_i18n::t;                         // Localization macro
-use locale_config::Locale;               // System locale detection
-
-// CLI, formatting, concurrency, logging, progress and HTTP libraries
 use clap::Parser;
-use colored::*;                           // Terminal color styling
-use futures::stream::{FuturesUnordered, StreamExt};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle}; // Progress bar utilities
-use log::{error, info};                  // Logging macros
-use reqwest::Client;                     // HTTP client
-use tokio::fs::File;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::sync::Semaphore;             // Concurrency limit
-use tokio::task;
+use colored::*;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use locale_config::Locale;
+use once_cell::sync::Lazy;
+use reqwest::blocking::Client;
+use rust_i18n::t;
+use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, Write, Read};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
+rust_i18n::i18n!("i18n");
 
-rust_i18n::i18n!("i18n"); // Loads localization YAML files from the `i18n` directory
-
-// Lazy static initializer to set the application's locale before CLI parsing
+// Lazy static initializer to set the application locale at startup
 static INIT_LOCALE: Lazy<()> = Lazy::new(|| {
     let system_locale = Locale::user_default().to_string();
     let short_locale = system_locale.split('_').next().unwrap_or("en");
     rust_i18n::set_locale(short_locale);
 });
 
-/// CLI argument definition using clap
+/// Definition of CLI arguments
 #[derive(Parser)]
-#[command(name = "dwrs",author, version, about = format!("{}",t!("about")))]
-#[command(group(clap::ArgGroup::new("input").required(true).args(&["url","file"])))]
+#[command(name = "dwrs", author, version, about = format!("{}", t!("about")))]
+#[command(group(clap::ArgGroup::new("input").required(true).args(&["url", "file"])))]
 struct Args {
-    /// Direct list of URLs to download
+     /// Direct list of URLs to download
     #[arg(required = false)]
     url: Vec<String>,
 
-    /// Output filenames (must match count of URLs or be empty)
+    /// Output file names (optional)
     #[arg(short, long)]
     output: Vec<String>,
 
-    /// Max number of parallel downloads
+    /// Number of parallel download jobs
     #[arg(short, long, default_value = "1")]
     jobs: usize,
 
-    /// Optional input file in format: `url output`
+    /// Input file containing lines of: `url output`
     #[arg(short, long)]
     file: Option<PathBuf>,
 }
 
-/// Parses a file with either `url output` or `url` lines
-async fn parse_file(path: &PathBuf) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
-    let file = File::open(path).await?;
+/// Parse a file with either `url output` or just `url` per line
+fn parse_file(path: &PathBuf) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let file = File::open(path)?;
     let reader = BufReader::new(file);
-    let mut lines = reader.lines();
-
     let mut pairs = Vec::new();
 
-    while let Some(line) = lines.next_line().await? {
+    for line in reader.lines() {
+        let line = line?;
         let parts: Vec<_> = line.split_whitespace().collect();
         if parts.len() == 2 {
-            // Explicit output filename
+            // Line with explicit output filename
             pairs.push((parts[0].to_string(), parts[1].to_string()));
         } else if parts.len() == 1 {
             // Auto-generate filename from URL
@@ -73,24 +64,53 @@ async fn parse_file(path: &PathBuf) -> Result<Vec<(String, String)>, Box<dyn std
             eprintln!("{}: {}", t!("wrong-format-string").red().bold(), line);
         }
     }
+
     Ok(pairs)
 }
 
-#[tokio::main]
-async fn main() {
-    Lazy::force(&INIT_LOCALE); // Force locale setup before anything else
-    env_logger::init(); // Enable logging
-    info!("logger init");
 
-    let args = Args::parse(); // Parse command-line arguments
+fn download_file(
+    client: &Client,
+    url: &str,
+    output: &PathBuf,
+    pb: &ProgressBar,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut response = client.get(url).send()?;
+    let total_size = response.content_length().unwrap_or(0);
+
+    pb.set_length(total_size);
+
+    let mut file = File::create(output)?;
+    let mut downloaded = 0u64;
+    let mut buffer = [0u8; 8192];
+
+    while let Ok(n) = response.read(&mut buffer) {
+        if n == 0 {
+            break;
+        }
+        file.write_all(&buffer[..n])?;
+        downloaded += n as u64;
+        pb.set_position(downloaded);
+    }
+
+    Ok(())
+}
+
+fn main() {
+    Lazy::force(&INIT_LOCALE);
+    env_logger::init();
+
+    let args = Args::parse();
+    let client = Client::new();
+    let mp = Arc::new(MultiProgress::new());
+    let semaphore = Arc::new(Mutex::new(0usize));
 
     let mut url_output_pairs = Vec::new();
 
-    // Load from file or from direct CLI arguments
     if let Some(file_path) = args.file {
-        url_output_pairs = parse_file(&file_path).await.unwrap_or_else(|e| {
+        url_output_pairs = parse_file(&file_path).unwrap_or_else(|e| {
             eprintln!("{}: {}", t!("error-in-reading-file").red().bold(), e);
-            panic!();
+            std::process::exit(1);
         });
     } else {
         for (i, url) in args.url.iter().enumerate() {
@@ -102,86 +122,71 @@ async fn main() {
             url_output_pairs.push((url.clone(), output));
         }
 
-        // Validate that number of output paths matches number of URLs
         if !args.output.is_empty() && args.output.len() != args.url.len() {
-            println!("{}", args.output.len());
-            error!("Error count of output files dont equal of urls");
             eprintln!("{}", t!("error-count").red().bold());
-            panic!()
+            std::process::exit(1);
         }
     }
 
-    // Shared HTTP client and progress manager
-    let client = Client::new();
-    let mp = Arc::new(MultiProgress::new());
-    let semaphore = Arc::new(Semaphore::new(args.jobs));
+    let mut handles = vec![];
 
-    let mut tasks = FuturesUnordered::new();
-
-    // Spawn async download tasks
     for (url, output) in url_output_pairs.into_iter() {
-        let outstr = output.clone();
-        let output = PathBuf::from(output);
-
         let client = client.clone();
         let mp = mp.clone();
         let sem = semaphore.clone();
-        let url = url.clone();
+        let output = PathBuf::from(output);
+        let outstr = output.display().to_string();
 
-        tasks.push(task::spawn(async move {
-            let _permit = sem.acquire().await.unwrap(); // Wait for slot
-            let pb = mp.add(ProgressBar::new_spinner()); // Spinner-based progress bar
+        // wait for free slot
+        loop {
+            let mut count = sem.lock().unwrap();
+            if *count < args.jobs {
+                *count += 1;
+                break;
+            }
+            drop(count);
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+
+        let handle = thread::spawn(move || {
+            let pb = mp.add(ProgressBar::new_spinner());
             pb.set_style(
-                ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} ({percent}%) {msg}").unwrap()
+                ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} ({percent}%) {msg}")
+                .unwrap(),
             );
+            pb.set_message(format!(
+                "{} {} → {}",
+                t!("download").blue(),
+                                   url.yellow().bold(),
+                                   outstr.green().bold()
+            ));
 
-            pb.set_message(
-                format!(
-                    "{} {} → {}",
-                    t!("download").blue(),
-                        url.yellow().bold(),
-                        outstr.green().bold()
-                )
-            );
-
-            match download_file(&client, &url , &output, &pb).await {
-                Ok(_) => pb.finish_with_message(
-                    format!("{}: {}", t!("download-finish").green().bold(), outstr.green())
-                ),
-                Err(e) => pb.finish_with_message(
-                    format!(
+            match download_file(&client, &url, &output, &pb) {
+                Ok(_) => {
+                    pb.finish_with_message(format!(
+                        "{}: {}",
+                        t!("download-finish").green().bold(),
+                                                   outstr.green()
+                    ));
+                }
+                Err(e) => {
+                    pb.finish_with_message(format!(
                         "{}: {}: {}",
                         t!("download-error").red().bold(),
-                            outstr,
-                            e
-                    )
-                ),
+                                                   outstr,
+                                                   e
+                    ));
+                }
             }
-        }));
+
+            let mut count = sem.lock().unwrap();
+            *count -= 1;
+        });
+
+        handles.push(handle);
     }
 
-    // Wait for all tasks to complete
-    while let Some(_) = tasks.next().await {}
-}
-
-/// Download a single file with a streaming response and write to disk
-async fn download_file(
-    client: &Client,
-    url: &str,
-    output: &PathBuf,
-    pb: &ProgressBar,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let response = client.get(url).send().await?;
-    let file_size = response.content_length().unwrap_or(0);
-
-    pb.set_length(file_size);
-    let mut file = tokio::fs::File::create(&output).await?;
-    let mut stream = response.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk?;
-        file.write_all(&chunk).await?;
-        pb.inc(chunk.len() as u64); // Update progress
+    for handle in handles {
+        handle.join().unwrap();
     }
-
-    Ok(())
 }
