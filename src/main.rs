@@ -85,6 +85,7 @@ async fn main() {
     env_logger::init(); // Enable logging
     info!("logger init");
 
+
     let args = Args::parse(); // Parse command-line arguments
 
     let mut url_output_pairs = Vec::new();
@@ -185,6 +186,10 @@ async fn download_file(
         request = request.header("Range", format!("bytes={}-",start));
     }
     let response = request.send().await?;
+    if response.status().as_u16() != 200 as u16 {
+        error!("Error status code of response: {}", response.status().as_u16());
+        panic!("Status code {}",response.status().as_str().red().bold())
+    }
     let file_size = response.content_length().unwrap_or(0);
 
     pb.set_length(start + file_size);
@@ -203,6 +208,7 @@ async fn download_file(
         file.write_all(&chunk).await?;
         pb.inc(chunk.len() as u64); // Update progress
     }
+
 
     Ok(())
 }
