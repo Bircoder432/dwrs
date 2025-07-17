@@ -103,12 +103,12 @@ fn spawn_background_process() -> std::io::Result<()> {
     Ok(())
 }
 
-fn notify_send(msg: &str) {
+fn notify_send(msg: String) {
     if std::env::var("DISPLAY").is_ok() {
         // Try notify-rust
-        let _ = notify_rust::Notification::new()
+        let _ = Notification::new()
         .summary("dwrs")
-        .body(msg)
+        .body(&msg)
         .show();
     } else {
         // Log or print to terminal
@@ -195,7 +195,7 @@ async fn main() {
                 Ok(_) => { pb.finish_with_message(
                     format!("{}: {}", t!("download-finish").green().bold(), outstr.green()));
                     if args.notify {
-                        notify_send("Download finish");
+                        notify_send(format!("{}",t!("download-finish")));
                     }
 
                 }
@@ -209,7 +209,7 @@ async fn main() {
                     )
                 );
                 if args.notify {
-                    notify_send("Download error");
+                    notify_send(format!("{}: {}: {}",t!("download-error"),outstr,e));
                 }
                 }
             }
@@ -240,7 +240,7 @@ async fn download_file(
     let response = request.send().await?;
     if response.status().as_u16() != 200 as u16 {
         error!("Error status code of response: {}", response.status().as_u16());
-        panic!("Status code {}",response.status().as_str().red().bold())
+        return Err(format!("Error status code: {}",response.status().as_str()).into());
     }
     let file_size = response.content_length().unwrap_or(0);
 
