@@ -1,6 +1,8 @@
 // System and library imports
 use std::path::PathBuf;
+use std::env;
 use std::collections::HashMap;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 
 use once_cell::sync::Lazy;               // For lazy static initialization
@@ -18,6 +20,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::Semaphore;             // Concurrency limit
 use tokio::task;
+use notify_rust::Notification;
 
 
 rust_i18n::i18n!("i18n"); // Loads localization YAML files from the `i18n` directory
@@ -34,6 +37,11 @@ static INIT_LOCALE: Lazy<()> = Lazy::new(|| {
 #[command(name = "dwrs",author, version, about = format!("{}",t!("about")))]
 #[command(group(clap::ArgGroup::new("input").required(true).args(&["url","file"])))]
 struct Args {
+    #[arg(short,long)]
+    notify: bool,
+
+    #[arg(long)]
+    background: bool,
     /// Continue download
     #[arg(short, long, default_value_t = false)]
     continue_: bool,
@@ -79,6 +87,35 @@ async fn parse_file(path: &PathBuf) -> Result<Vec<(String, String)>, Box<dyn std
     Ok(pairs)
 }
 
+fn spawn_background_process() -> std::io::Result<()> {
+    let args: Vec<String> = std::env::args()
+    .filter(|a| a != "--background")
+    .collect();
+
+    let child = std::process::Command::new(&args[0])
+    .args(&args[1..])
+    .stdin(std::process::Stdio::null())
+    .stdout(std::process::Stdio::null())
+    .stderr(std::process::Stdio::null())
+    .spawn()?;
+
+    println!("Download started in background (PID: {})", child.id());
+    Ok(())
+}
+
+fn notify_send(msg: &str) {
+    if std::env::var("DISPLAY").is_ok() {
+        // Try notify-rust
+        let _ = notify_rust::Notification::new()
+        .summary("dwrs")
+        .body(msg)
+        .show();
+    } else {
+        // Log or print to terminal
+        println!("{}",msg);
+    }
+}
+
 #[tokio::main]
 async fn main() {
     Lazy::force(&INIT_LOCALE); // Force locale setup before anything else
@@ -91,6 +128,12 @@ async fn main() {
     let mut url_output_pairs = Vec::new();
 
     // Load from file or from direct CLI arguments
+
+    if args.background {
+        spawn_background_process().unwrap();
+        return;
+    }
+
     if let Some(file_path) = args.file {
         url_output_pairs = parse_file(&file_path).await.unwrap_or_else(|e| {
             eprintln!("{}: {}", t!("error-in-reading-file").red().bold(), e);
@@ -149,17 +192,26 @@ async fn main() {
             );
 
             match download_file(&client, &url , &output, &pb, resume).await {
-                Ok(_) => pb.finish_with_message(
-                    format!("{}: {}", t!("download-finish").green().bold(), outstr.green())
-                ),
-                Err(e) => pb.finish_with_message(
+                Ok(_) => { pb.finish_with_message(
+                    format!("{}: {}", t!("download-finish").green().bold(), outstr.green()));
+                    if args.notify {
+                        notify_send("Download finish");
+                    }
+
+                }
+
+                Err(e) => { pb.finish_with_message(
                     format!(
                         "{}: {}: {}",
                         t!("download-error").red().bold(),
                             outstr,
                             e
                     )
-                ),
+                );
+                if args.notify {
+                    notify_send("Download error");
+                }
+                }
             }
         }));
     }
