@@ -8,8 +8,7 @@ pub fn create_progress_bar(mp: &MultiProgress, url: &str, output: &str) -> Progr
     );
 
     pb.set_message(format!(
-        "{} {} → {}",
-        rust_i18n::t!("download").blue(),
+        "Downloading {} → {}",
         url.yellow().bold(),
         output.green().bold()
     ));

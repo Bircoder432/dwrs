@@ -5,7 +5,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 
 pub async fn parse_file(
     path: &PathBuf,
-) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error + Send + Sync>> {
     let file = File::open(path).await?;
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
@@ -19,11 +19,7 @@ pub async fn parse_file(
             let filename = parts[0].split('/').last().unwrap_or("file.bin").to_string();
             pairs.push((parts[0].to_string(), filename));
         } else {
-            eprintln!(
-                "{}: {}",
-                rust_i18n::t!("wrong-format-string").red().bold(),
-                line
-            );
+            eprintln!("{}: {}", "Wrong format string".red().bold(), line);
         }
     }
     Ok(pairs)
