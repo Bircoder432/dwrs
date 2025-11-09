@@ -1,6 +1,6 @@
 # dwrs
 
-**dwrs** is a parallel file downloader with localization support, progress bars, and colorful output — written in Rust.  
+**dwrs** is a parallel file downloader with localization support, progress bars, and colorful output — written in Rust.
 It’s a fast, user-friendly alternative to tools like `wget`, designed for modern terminal workflows.
 
 ![GitHub release](https://img.shields.io/github/v/release/bircoder432/dwrs?style=flat-square)
@@ -33,7 +33,7 @@ Requires [Rust](https://rustup.rs) and Cargo.
 ### Build from source
 
 ```bash
-git clone https://github.com/your-username/dwrs.git
+git clone https://github.com/bircoder432/dwrs.git
 cd dwrs
 cargo build --release
 ```
@@ -100,5 +100,3 @@ Contributions, feedback, and feature suggestions are welcome!
 Feel free to open issues or submit pull requests.
 
 ---
-
-
