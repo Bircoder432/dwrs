@@ -11,7 +11,7 @@ pub async fn download_file(
     output: &PathBuf,
     pb: &ProgressBar,
     resume: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut start: u64 = 0;
     if resume && output.exists() {
         start = tokio::fs::metadata(&output).await?.len();

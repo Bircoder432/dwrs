@@ -1,34 +1,31 @@
+#[macro_use]
+extern crate rust_i18n;
+
+i18n!("i18n", fallback = "en");
+
 use std::sync::Arc;
 
 mod cli;
 mod download;
 mod file_parser;
-mod localization;
 mod notifications;
 mod progress;
 
 use clap::Parser;
 use cli::Args;
 use colored::Colorize;
-use download::download_file;
-use file_parser::parse_file;
+use dwrs::*;
 use futures::stream::{FuturesUnordered, StreamExt};
 use indicatif::MultiProgress;
-use localization::init_locale;
 use log::{error, info};
-use notifications::{notify_send, spawn_background_process};
-use progress::create_progress_bar;
 use reqwest::Client;
 use rust_i18n::t;
 use tokio::sync::Semaphore;
 use tokio::task;
 
-rust_i18n::i18n!("i18n");
-
 #[tokio::main]
 async fn main() {
-    init_locale();
-    env_logger::init();
+    init();
     info!("Logger initialized");
 
     let args = Args::parse();
@@ -80,7 +77,7 @@ async fn main() {
 
         tasks.push(task::spawn(async move {
             let _permit = sem.acquire().await.unwrap();
-            let pb = create_progress_bar(&mp, &url, &outstr);
+            let pb = progress::create_progress_bar(&mp, &url, &outstr);
 
             match download_file(&client, &url, &output, &pb, resume).await {
                 Ok(_) => {
