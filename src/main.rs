@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate rust_i18n;
 
-i18n!("i18n", fallback = "en");
+i18n!("locale", fallback = "en");
 
 use std::sync::Arc;
 
@@ -81,6 +81,7 @@ async fn main() {
 
             match download_file(&client, &url, &output, &pb, resume).await {
                 Ok(_) => {
+                    pb.finish_and_clear();
                     pb.finish_with_message(format!(
                         "{}: {}",
                         t!("download-finish").green().bold(),
