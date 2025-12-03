@@ -74,12 +74,13 @@ async fn main() {
         let url = url.clone();
         let resume = args.continue_;
         let notify = args.notify;
+        let jobs = args.jobs;
 
         tasks.push(task::spawn(async move {
             let _permit = sem.acquire().await.unwrap();
             let pb = progress::create_progress_bar(&mp, &url, &outstr);
 
-            match download_file(&client, &url, &output, &pb, resume).await {
+            match download_file(&client, &url, &output, &pb, resume, jobs).await {
                 Ok(_) => {
                     pb.finish_and_clear();
                     pb.finish_with_message(format!(

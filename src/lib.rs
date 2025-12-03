@@ -100,6 +100,7 @@ impl Downloader {
             &output_path,
             &pb,
             self.config.continue_download,
+            self.config.jobs,
         )
         .await
     }
@@ -128,12 +129,13 @@ impl Downloader {
             let output_str = output_path.to_string_lossy().to_string();
             let resume = self.config.continue_download;
             let url = url.to_string();
+            let jobs = self.config.jobs;
 
             tasks.push(task::spawn(async move {
                 let _permit = sem.acquire().await.unwrap();
                 let pb = progress::create_progress_bar(&mp, &url, &output_str);
 
-                match download_file(&client, &url, &output_path, &pb, resume).await {
+                match download_file(&client, &url, &output_path, &pb, resume, jobs).await {
                     Ok(_) => {
                         pb.finish_with_message(format!(
                             "{}: {}",
