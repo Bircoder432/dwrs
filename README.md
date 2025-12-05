@@ -11,7 +11,7 @@ It’s a fast, user-friendly alternative to tools like `wget`, designed for mode
 
 ## ✨ Features
 
-- 🚀 Parallel downloads (`--jobs`)
+- 🚀 Parallel downloads (`--workers`)
 - 📄 Supports download lists from file
 - 🌐 Localized interface (English & Russian)
 - 📦 Colorful terminal output and progress bars
