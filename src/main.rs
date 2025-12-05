@@ -61,7 +61,7 @@ async fn main() {
 
     let client = Client::new();
     let mp = Arc::new(MultiProgress::new());
-    let semaphore = Arc::new(Semaphore::new(args.jobs));
+    let semaphore = Arc::new(Semaphore::new(args.workers));
     let mut tasks = FuturesUnordered::new();
 
     for (url, output) in url_output_pairs.into_iter() {
@@ -74,13 +74,13 @@ async fn main() {
         let url = url.clone();
         let resume = args.continue_;
         let notify = args.notify;
-        let jobs = args.jobs;
+        let workers = args.workers;
 
         tasks.push(task::spawn(async move {
             let _permit = sem.acquire().await.unwrap();
             let pb = progress::create_progress_bar(&mp, &url, &outstr);
 
-            match download_file(&client, &url, &output, &pb, resume, jobs).await {
+            match download_file(&client, &url, &output, &pb, resume, workers).await {
                 Ok(_) => {
                     pb.finish_and_clear();
                     pb.finish_with_message(format!(

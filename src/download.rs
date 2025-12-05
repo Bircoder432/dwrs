@@ -11,7 +11,7 @@ pub async fn download_file(
     output: &PathBuf,
     pb: &ProgressBar,
     resume: bool,
-    jobs: usize,
+    workers: usize,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let head_resp = client.head(url).send().await?;
     let total_size = head_resp
@@ -22,14 +22,14 @@ pub async fn download_file(
 
     pb.set_length(total_size);
 
-    if jobs <= 1 || total_size == 0 {
+    if workers <= 1 || total_size == 0 {
         return download_range(client, url, output, pb, resume, 0, total_size - 1).await;
     }
 
-    let chunk_size = (total_size + jobs as u64 - 1) / jobs as u64;
+    let chunk_size = (total_size + workers as u64 - 1) / workers as u64;
     let mut handles = vec![];
 
-    for i in 0..jobs {
+    for i in 0..workers {
         let start = i as u64 * chunk_size;
         let end = std::cmp::min(start + chunk_size - 1, total_size - 1);
         let client = client.clone();

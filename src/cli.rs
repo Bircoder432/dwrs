@@ -26,7 +26,7 @@ pub struct Args {
     pub output: Vec<String>,
 
     #[arg(short, long, default_value = "1")]
-    pub jobs: usize,
+    pub workers: usize,
 
     #[arg(short, long)]
     pub file: Option<PathBuf>,

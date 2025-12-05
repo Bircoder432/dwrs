@@ -1,6 +1,6 @@
 [package]
 name = "dwrs"
-version = "0.1.5"
+version = "0.2.0"
 authors = ["vadim rofeds12345@gmail.com"]
 edition = "2024"
 description = "CLI tool for parallel file downloads with progress bar and i18n support"
