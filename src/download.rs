@@ -1,9 +1,8 @@
 use futures::StreamExt;
 use indicatif::ProgressBar;
-use log::error;
 use reqwest::Client;
 use std::path::{Path, PathBuf};
-use tokio::{fs, io::AsyncWriteExt, task};
+use tokio::{fs, io::AsyncWriteExt};
 
 pub async fn download_file(
     client: &Client,
@@ -13,7 +12,6 @@ pub async fn download_file(
     resume: bool,
     workers: usize,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // HEAD-запрос, чтобы узнать размер и поддержку Range
     let head_resp = client.head(url).send().await?;
     let total_size = head_resp
         .headers()

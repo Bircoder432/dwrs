@@ -1,0 +1,10 @@
+# dwrs test config with custom progress bar characters
+
+# Template for progress bar
+template = "{spinner:.green} [{bar:30.cyan/blue}] {pos:>5}/{len:5} ({percent}%) {msg}"
+
+# Custom progress bar characters: full, partial, empty
+bar_chars = "=>-"
+
+# Number of parallel workers
+workers = 3

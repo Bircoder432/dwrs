@@ -30,4 +30,7 @@ pub struct Args {
 
     #[arg(short, long)]
     pub file: Option<PathBuf>,
+
+    #[arg(long)]
+    pub config: Option<String>,
 }

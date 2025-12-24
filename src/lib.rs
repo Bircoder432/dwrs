@@ -18,8 +18,8 @@ i18n!("i18n", fallback = "en");
 
 use std::path::PathBuf;
 use std::sync::Arc;
-
 pub mod cli;
+pub mod config;
 pub mod download;
 pub mod file_parser;
 pub mod notifications;
@@ -39,17 +39,23 @@ pub use file_parser::parse_file;
 #[derive(Debug, Clone)]
 pub struct DownloadConfig {
     /// Number of parallel downloads
-    pub jobs: usize,
+    pub workers: usize,
     /// Whether to resume interrupted downloads
     pub continue_download: bool,
     /// Whether to show desktop notifications
     pub notify: bool,
+    /// Template for progressbar
+    pub template: String,
+    /// Chars for progress bar "FPE" Full Partial Empty
+    pub chars: String,
 }
 
 impl Default for DownloadConfig {
     fn default() -> Self {
         Self {
-            jobs: 1,
+            workers: 1,
+            template: "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} ({percent}%) {msg}".to_string(),
+            chars: "█▌░".to_string(),
             continue_download: false,
             notify: false,
         }
@@ -92,7 +98,13 @@ impl Downloader {
         output_path: PathBuf,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mp = Arc::new(MultiProgress::new());
-        let pb = progress::create_progress_bar(&mp, url, output_path.to_str().unwrap_or("file"));
+        let pb = progress::create_progress_bar(
+            &mp,
+            &self.config.template,
+            &self.config.chars,
+            url,
+            output_path.to_str().unwrap_or("file"),
+        );
 
         download::download_file(
             &self.client,
@@ -100,7 +112,7 @@ impl Downloader {
             &output_path,
             &pb,
             self.config.continue_download,
-            self.config.jobs,
+            self.config.workers,
         )
         .await
     }
@@ -119,7 +131,7 @@ impl Downloader {
         downloads: Vec<(&str, PathBuf)>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mp = Arc::new(MultiProgress::new());
-        let semaphore = Arc::new(Semaphore::new(self.config.jobs));
+        let semaphore = Arc::new(Semaphore::new(self.config.workers));
         let mut tasks = FuturesUnordered::new();
 
         for (url, output_path) in downloads.into_iter() {
@@ -129,11 +141,13 @@ impl Downloader {
             let output_str = output_path.to_string_lossy().to_string();
             let resume = self.config.continue_download;
             let url = url.to_string();
-            let jobs = self.config.jobs;
+            let jobs = self.config.workers;
+            let template = self.config.template.clone();
+            let chars = self.config.chars.clone();
 
             tasks.push(task::spawn(async move {
                 let _permit = sem.acquire().await.unwrap();
-                let pb = progress::create_progress_bar(&mp, &url, &output_str);
+                let pb = progress::create_progress_bar(&mp, &template, &chars, &url, &output_str);
 
                 match download_file(&client, &url, &output_path, &pb, resume, jobs).await {
                     Ok(_) => {

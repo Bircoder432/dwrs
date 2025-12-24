@@ -1,0 +1,54 @@
+use std::fs;
+use std::path::Path;
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ConfigFile {
+    pub template: Option<String>,
+    pub bar_chars: Option<String>,
+    pub workers: Option<u8>,
+}
+
+#[derive(Debug)]
+pub struct Config {
+    pub template: String,
+    pub bar_chars: String,
+    pub workers: u8,
+}
+
+impl Config {
+    pub fn load(path: &str) -> Self {
+        let config_file: ConfigFile = fs::read_to_string(path)
+            .ok()
+            .and_then(|content| toml::from_str(&content).ok())
+            .unwrap_or(ConfigFile {
+                template: None,
+                bar_chars: None,
+                workers: None,
+            });
+        Self {
+            template: config_file.template.unwrap_or(Self::default().template),
+            bar_chars: config_file.bar_chars.unwrap_or(Self::default().bar_chars),
+            workers: config_file.workers.unwrap_or(Self::default().workers),
+        }
+    }
+
+    pub fn load_from_config_dir() -> Self {
+        if let Some(mut path) = dirs::config_dir() {
+            path.push("dwrs");
+            path.push("config.toml");
+            return Self::load(path.to_str().unwrap_or_default());
+        }
+        log::warn!("Config dir not found, using default config");
+        Self::default()
+    }
+
+    pub fn default() -> Self {
+        Self {
+            template: "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} ({percent}%) {msg}".to_string(),
+            bar_chars: "█▌░".to_string(),
+            workers: 1,
+        }
+    }
+}

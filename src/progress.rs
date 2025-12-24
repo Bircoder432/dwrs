@@ -1,10 +1,18 @@
 use colored::Colorize;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
-pub fn create_progress_bar(mp: &MultiProgress, url: &str, output: &str) -> ProgressBar {
+pub fn create_progress_bar(
+    mp: &MultiProgress,
+    template: &str,
+    chars: &str,
+    url: &str,
+    output: &str,
+) -> ProgressBar {
     let pb = mp.add(ProgressBar::new_spinner());
     pb.set_style(
-        ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} ({percent}%) {msg}").unwrap()
+        ProgressStyle::with_template(template)
+            .unwrap()
+            .progress_chars(chars),
     );
 
     pb.set_message(format!(

@@ -12,8 +12,10 @@ categories = ["command-line-utilities", "network-programming"]
 exclude = ["target/", "*.deb", "*.rpm", "*.tar.gz", "tests/", ".github/"]
 
 [dependencies]
+anyhow = "1.0.100"
 clap = { version = "4.5.41", features = ["derive"]}
 colored = "3.0.0"
+dirs = "6.0.0"
 env_logger = "0.11.8"
 futures = "0.3.31"
 httpmock = "0.8.2"
@@ -24,7 +26,9 @@ notify-rust = "4.11.7"
 once_cell = "1.21.3"
 reqwest = { version = "0.12.22", default-features = false, features = ["rustls-tls","blocking","json","stream"]}
 rust-i18n = "3.1.5"
+serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.46.1", features = ["full"]}
+toml = "0.9.10"
 
 
 [[bin]]

@@ -3,25 +3,16 @@ extern crate rust_i18n;
 
 i18n!("locale", fallback = "en");
 
-use std::sync::Arc;
-
-mod cli;
-mod download;
-mod file_parser;
-mod notifications;
-mod progress;
-
 use clap::Parser;
-use cli::Args;
 use colored::Colorize;
-use dwrs::*;
-use futures::stream::{FuturesUnordered, StreamExt};
-use indicatif::MultiProgress;
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use log::{error, info};
-use reqwest::Client;
-use rust_i18n::t;
-use tokio::sync::Semaphore;
-use tokio::task;
+use std::path::PathBuf;
+
+use dwrs::cli::Args;
+use dwrs::config::Config;
+use dwrs::{Downloader, init, notify_send};
 
 #[tokio::main]
 async fn main() {
@@ -29,83 +20,67 @@ async fn main() {
     info!("Logger initialized");
 
     let args = Args::parse();
+    let mut cfg = Config::load_from_config_dir();
+    if args.config.is_some() {
+        cfg = Config::load(&args.config.unwrap());
+    }
+
+    let mut workers = cfg.workers;
+    if args.workers != 1 {
+        workers = args.workers as u8;
+    }
+    let download_config = dwrs::DownloadConfig {
+        workers: workers as usize,
+        template: cfg.template,
+        chars: cfg.bar_chars,
+        continue_download: args.continue_,
+        notify: args.notify,
+    };
+
+    let downloader = Downloader::new(download_config);
 
     if args.background {
-        spawn_background_process().unwrap();
+        if let Err(e) = dwrs::spawn_background_process() {
+            error!("Failed to spawn background process: {}", e);
+        }
         return;
     }
 
-    let mut url_output_pairs = Vec::new();
-
-    if let Some(file_path) = args.file {
-        url_output_pairs = parse_file(&file_path).await.unwrap_or_else(|e| {
-            eprintln!("{}: {}", t!("error-in-reading-file").red().bold(), e);
-            panic!();
-        });
+    let downloads: Vec<(String, PathBuf)> = if let Some(file_path) = args.file {
+        match dwrs::parse_file(&file_path).await {
+            Ok(pairs) => pairs
+                .into_iter()
+                .map(|(url, path)| (url, PathBuf::from(path)))
+                .collect(),
+            Err(e) => {
+                eprintln!("{}: {}", t!("error-in-reading-file").red().bold(), e);
+                return;
+            }
+        }
     } else {
+        let mut pairs = Vec::new();
         for (i, url) in args.url.iter().enumerate() {
             let output = if let Some(path) = args.output.get(i) {
-                path.clone()
+                PathBuf::from(path)
             } else {
-                url.split('/').last().unwrap_or("file.bin").to_string()
+                PathBuf::from(url.split('/').last().unwrap_or("file.bin"))
             };
-            url_output_pairs.push((url.clone(), output));
+            pairs.push((url.clone(), output));
         }
-
         if !args.output.is_empty() && args.output.len() != args.url.len() {
-            error!("Error count of output files dont equal of urls");
+            error!("Error: number of output files does not match number of URLs");
             eprintln!("{}", t!("error-count").red().bold());
-            panic!()
+            return;
         }
+        pairs
+    };
+
+    let downloads_refs: Vec<(&str, PathBuf)> = downloads
+        .iter()
+        .map(|(url, path)| (url.as_str(), path.clone()))
+        .collect();
+
+    if let Err(e) = downloader.download_multiple(downloads_refs).await {
+        error!("Error during downloads: {}", e);
     }
-
-    let client = Client::new();
-    let mp = Arc::new(MultiProgress::new());
-    let semaphore = Arc::new(Semaphore::new(args.workers));
-    let mut tasks = FuturesUnordered::new();
-
-    for (url, output) in url_output_pairs.into_iter() {
-        let outstr = output.clone();
-        let output = std::path::PathBuf::from(output);
-
-        let client = client.clone();
-        let mp = mp.clone();
-        let sem = semaphore.clone();
-        let url = url.clone();
-        let resume = args.continue_;
-        let notify = args.notify;
-        let workers = args.workers;
-
-        tasks.push(task::spawn(async move {
-            let _permit = sem.acquire().await.unwrap();
-            let pb = progress::create_progress_bar(&mp, &url, &outstr);
-
-            match download_file(&client, &url, &output, &pb, resume, workers).await {
-                Ok(_) => {
-                    pb.finish_and_clear();
-                    pb.finish_with_message(format!(
-                        "{}: {}",
-                        t!("download-finish").green().bold(),
-                        outstr.green()
-                    ));
-                    if notify {
-                        notify_send(t!("download-finish").to_string());
-                    }
-                }
-                Err(e) => {
-                    pb.finish_with_message(format!(
-                        "{}: {}: {}",
-                        t!("download-error").red().bold(),
-                        outstr,
-                        e
-                    ));
-                    if notify {
-                        notify_send(format!("{}: {}: {}", t!("download-error"), outstr, e));
-                    }
-                }
-            }
-        }));
-    }
-
-    while let Some(_) = tasks.next().await {}
 }
