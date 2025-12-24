@@ -49,6 +49,14 @@ Download a file:
 ```bash
 dwrs --url https://example.com/file.iso
 ```
+or
+```bash
+dwrs https://example.com/file.iso
+```
+Download with multiply workers
+```bash
+dwrs -w 20 https://example.com/file.iso
+```
 
 Specify custom output name:
 
