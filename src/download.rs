@@ -23,7 +23,8 @@ pub async fn download_file(
     pb.set_length(total_size);
 
     if workers <= 1 || total_size == 0 {
-        return download_range(client, url, output, pb, resume, 0, total_size - 1).await;
+        let end = if total_size > 0 { total_size - 1 } else { 0 };
+        return download_range(client, url, output, pb, resume, 0, end).await;
     }
 
     let chunk_size = (total_size + workers as u64 - 1) / workers as u64;
@@ -80,8 +81,17 @@ async fn download_range(
         return Ok(());
     }
 
+    let head_resp = client.head(url).send().await?;
+    let accept_ranges = head_resp
+        .headers()
+        .get(reqwest::header::ACCEPT_RANGES)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
     let mut request = client.get(url);
-    request = request.header("Range", format!("bytes={}-{}", offset, end));
+    if accept_ranges == "bytes" {
+        request = request.header("Range", format!("bytes={}-{}", offset, end));
+    }
 
     let resp = request.send().await?;
     if !resp.status().is_success() && resp.status().as_u16() != 206 {
