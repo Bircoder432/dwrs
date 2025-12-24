@@ -13,6 +13,7 @@ pub async fn download_file(
     resume: bool,
     workers: usize,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // HEAD-запрос, чтобы узнать размер и поддержку Range
     let head_resp = client.head(url).send().await?;
     let total_size = head_resp
         .headers()
@@ -20,11 +21,26 @@ pub async fn download_file(
         .and_then(|v| v.to_str().ok()?.parse::<u64>().ok())
         .unwrap_or(0);
 
+    let accept_ranges = head_resp
+        .headers()
+        .get(reqwest::header::ACCEPT_RANGES)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
     pb.set_length(total_size);
 
-    if workers <= 1 || total_size == 0 {
-        let end = if total_size > 0 { total_size - 1 } else { 0 };
-        return download_range(client, url, output, pb, resume, 0, end).await;
+    let use_range = accept_ranges == "bytes" && total_size > 0;
+    if !use_range || workers <= 1 {
+        return download_range(
+            client,
+            url,
+            output,
+            pb,
+            resume,
+            0,
+            total_size.saturating_sub(1),
+        )
+        .await;
     }
 
     let chunk_size = (total_size + workers as u64 - 1) / workers as u64;
@@ -39,7 +55,7 @@ pub async fn download_file(
         let pb = pb.clone();
         let resume = resume;
 
-        handles.push(task::spawn(async move {
+        handles.push(tokio::task::spawn(async move {
             download_range(&client, &url, &tmp_path, &pb, resume, start, end).await?;
             Ok::<_, Box<dyn std::error::Error + Send + Sync>>(tmp_path)
         }));
@@ -70,32 +86,20 @@ async fn download_range(
     start: u64,
     end: u64,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut offset = start;
+    let use_range = end > start;
 
+    let mut offset = start;
     if resume && output.exists() {
         offset += fs::metadata(output).await?.len();
     }
 
-    if offset > end {
-        pb.inc(end - start + 1);
-        return Ok(());
-    }
-
-    let head_resp = client.head(url).send().await?;
-    let accept_ranges = head_resp
-        .headers()
-        .get(reqwest::header::ACCEPT_RANGES)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-
     let mut request = client.get(url);
-    if accept_ranges == "bytes" {
+    if use_range {
         request = request.header("Range", format!("bytes={}-{}", offset, end));
     }
 
     let resp = request.send().await?;
     if !resp.status().is_success() && resp.status().as_u16() != 206 {
-        error!("Error status code: {}", resp.status());
         return Err(format!("HTTP error: {}", resp.status()).into());
     }
 
@@ -113,4 +117,39 @@ async fn download_range(
     }
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_download_range_no_range() {
+    use httpmock::MockServer;
+    use indicatif::ProgressBar;
+    use reqwest::Client;
+    use std::path::PathBuf;
+    let server = MockServer::start();
+    let body = b"hello world";
+    let m = server.mock(|when, then| {
+        when.method("GET").path("/file.txt");
+        then.status(200).header("Content-Length", "11").body(body);
+    });
+
+    let client = Client::new();
+    let output = PathBuf::from("test_file.txt");
+    let pb = ProgressBar::new(11);
+
+    download_range(
+        &client,
+        &format!("{}/file.txt", server.url("")),
+        &output,
+        &pb,
+        false,
+        0,
+        10,
+    )
+    .await
+    .unwrap();
+
+    let content = tokio::fs::read(&output).await.unwrap();
+    assert_eq!(content, body);
+    m.assert();
+    tokio::fs::remove_file(output).await.ok();
 }
