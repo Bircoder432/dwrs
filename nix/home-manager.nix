@@ -13,7 +13,7 @@ with lib;
 
     package = mkOption {
       type = types.package;
-      default = pkgs.dwrs;
+      default = self.packages.dwrs;
       description = "dwrs package to use";
     };
     settings.template = mkOption {
