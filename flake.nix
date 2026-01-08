@@ -16,6 +16,7 @@
       flake-utils,
       naersk,
       home-manager,
+      ...
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -39,9 +40,8 @@
           type = "app";
           program = "${pkgs.dwrs}/bin/dwrs";
         };
+
+        homeManagerModules.dwrs = import ./nix/home-manager.nix;
       }
-    )
-    // {
-      homeManagerModules.dwrs = import ./nix/home-manager.nix;
-    };
+    );
 }
