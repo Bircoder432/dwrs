@@ -30,6 +30,33 @@ cargo install dwrs
 
 Requires [Rust](https://rustup.rs) and Cargo.
 
+### Install via nix
+
+- Add to your flake:
+```nix
+  inputs = {
+    dwrs.url = "github:Bircoder432/dwrs";
+    dwrs.inputs.nixpkgs.follow = "nixpkgs";
+  };
+```
+- And in your home manager:
+
+```nix
+{ pkgs, inputs, ... }:
+
+{
+  imports = [ inputs.dwrs.homeManagerModules.dwrs ];
+
+  programs.dwrs.enable = true;
+  programs.dwrs.package = inputs.dwrs.packages.${pkgs.system}.dwrs;
+  programs.dwrs.settings = {
+    workers = 3;
+    bar_chars = "=>-";
+    template = "{spinner:.green} [{bar:30.cyan/blue}] {pos}/{len} ({percent}%) {msg}";
+  };
+}
+```
+
 ### Build from source
 
 ```bash
