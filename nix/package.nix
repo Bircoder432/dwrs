@@ -8,7 +8,7 @@
 
 naersk.buildPackage {
   pname = "dwrs";
-  version = "0.2.1";
+  version = "0.2.2";
   src = lib.cleanSource ../.;
   nativeBuildInputs = [
     pkg-config
