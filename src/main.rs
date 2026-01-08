@@ -27,10 +27,10 @@ async fn main() {
 
     let mut workers = cfg.workers;
     if args.workers != 1 {
-        workers = args.workers as u8;
+        workers = args.workers;
     }
     let download_config = dwrs::DownloadConfig {
-        workers: workers as usize,
+        workers: workers,
         template: cfg.template,
         chars: cfg.bar_chars,
         continue_download: args.continue_,

@@ -27,6 +27,7 @@ pub mod progress;
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use indicatif::MultiProgress;
+use notify_rust::Notification;
 use reqwest::Client;
 use rust_i18n::t;
 use tokio::sync::Semaphore;
@@ -114,7 +115,15 @@ impl Downloader {
             self.config.continue_download,
             self.config.workers,
         )
-        .await
+        .await?;
+        if self.config.notify {
+            Notification::new()
+                .summary("Download end")
+                .body("Download end")
+                .show()
+                .ok();
+        }
+        Ok(())
     }
 
     /// Download multiple files in parallel
@@ -173,6 +182,13 @@ impl Downloader {
 
         while let Some(result) = tasks.next().await {
             let _ = result??;
+        }
+        if self.config.notify {
+            Notification::new()
+                .summary("Downloading end")
+                .body("download end")
+                .show()
+                .ok();
         }
 
         Ok(())

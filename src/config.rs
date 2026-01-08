@@ -7,14 +7,14 @@ use serde::{Deserialize, Serialize};
 struct ConfigFile {
     pub template: Option<String>,
     pub bar_chars: Option<String>,
-    pub workers: Option<u8>,
+    pub workers: Option<usize>,
 }
 
 #[derive(Debug)]
 pub struct Config {
     pub template: String,
     pub bar_chars: String,
-    pub workers: u8,
+    pub workers: usize,
 }
 
 impl Config {
@@ -27,10 +27,11 @@ impl Config {
                 bar_chars: None,
                 workers: None,
             });
+        let default = Self::default();
         Self {
-            template: config_file.template.unwrap_or(Self::default().template),
-            bar_chars: config_file.bar_chars.unwrap_or(Self::default().bar_chars),
-            workers: config_file.workers.unwrap_or(Self::default().workers),
+            template: config_file.template.unwrap_or(default.template),
+            bar_chars: config_file.bar_chars.unwrap_or(default.bar_chars),
+            workers: config_file.workers.unwrap_or(default.workers),
         }
     }
 

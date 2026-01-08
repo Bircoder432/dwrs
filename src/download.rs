@@ -12,16 +12,16 @@ pub async fn download_file(
     resume: bool,
     workers: usize,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let head_resp = client.head(url).send().await?;
+    let head_resp = client.head(url).send().await.ok();
     let total_size = head_resp
-        .headers()
-        .get(reqwest::header::CONTENT_LENGTH)
+        .as_ref()
+        .and_then(|r| r.headers().get(reqwest::header::CONTENT_LENGTH))
         .and_then(|v| v.to_str().ok()?.parse::<u64>().ok())
         .unwrap_or(0);
 
     let accept_ranges = head_resp
-        .headers()
-        .get(reqwest::header::ACCEPT_RANGES)
+        .as_ref()
+        .and_then(|r| r.headers().get(reqwest::header::ACCEPT_RANGES))
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
@@ -88,7 +88,12 @@ async fn download_range(
 
     let mut offset = start;
     if resume && output.exists() {
-        offset += fs::metadata(output).await?.len();
+        let existing_len = fs::metadata(output).await?.len();
+        if existing_len > end - start + 1 {
+            fs::remove_file(output).await.ok();
+        } else {
+            offset += existing_len;
+        }
     }
 
     let mut request = client.get(url);
