@@ -1,5 +1,6 @@
 # dwrs test config with custom progress bar characters
 
+msg_template = "{download} {url} → {output}"
 # Template for progress bar
 template = "{spinner:.green} [{bar:30.cyan/blue}] {pos:>5}/{len:5} ({percent}%) {msg}"
 

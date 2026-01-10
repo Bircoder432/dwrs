@@ -5,14 +5,13 @@ i18n!("locale", fallback = "en");
 
 use clap::Parser;
 use colored::Colorize;
+use dwrs::cli::Args;
+use dwrs::config::Config;
+use dwrs::{Downloader, init, notify_send};
 use futures::StreamExt;
 use futures::stream::FuturesUnordered;
 use log::{error, info};
 use std::path::PathBuf;
-
-use dwrs::cli::Args;
-use dwrs::config::Config;
-use dwrs::{Downloader, init, notify_send};
 
 #[tokio::main]
 async fn main() {
@@ -31,6 +30,7 @@ async fn main() {
     }
     let download_config = dwrs::DownloadConfig {
         workers: workers,
+        msg_template: cfg.msg_template,
         template: cfg.template,
         chars: cfg.bar_chars,
         continue_download: args.continue_,

@@ -24,6 +24,7 @@ pub mod download;
 pub mod file_parser;
 pub mod notifications;
 pub mod progress;
+pub mod utils;
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use indicatif::MultiProgress;
@@ -47,6 +48,8 @@ pub struct DownloadConfig {
     pub notify: bool,
     /// Template for progressbar
     pub template: String,
+    /// template for msg
+    pub msg_template: String,
     /// Chars for progress bar "FPE" Full Partial Empty
     pub chars: String,
 }
@@ -56,6 +59,7 @@ impl Default for DownloadConfig {
         Self {
             workers: 1,
             template: "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} ({percent}%) {msg}".to_string(),
+            msg_template: "{download} {url} → {output}".to_string(),
             chars: "█▌░".to_string(),
             continue_download: false,
             notify: false,
@@ -101,6 +105,7 @@ impl Downloader {
         let mp = Arc::new(MultiProgress::new());
         let pb = progress::create_progress_bar(
             &mp,
+            &self.config.msg_template,
             &self.config.template,
             &self.config.chars,
             url,
@@ -152,11 +157,19 @@ impl Downloader {
             let url = url.to_string();
             let jobs = self.config.workers;
             let template = self.config.template.clone();
+            let msg_template = self.config.msg_template.clone();
             let chars = self.config.chars.clone();
 
             tasks.push(task::spawn(async move {
                 let _permit = sem.acquire().await.unwrap();
-                let pb = progress::create_progress_bar(&mp, &template, &chars, &url, &output_str);
+                let pb = progress::create_progress_bar(
+                    &mp,
+                    &template,
+                    &msg_template,
+                    &chars,
+                    &url,
+                    &output_str,
+                );
 
                 match download_file(&client, &url, &output_path, &pb, resume, jobs).await {
                     Ok(_) => {
