@@ -1,6 +1,6 @@
 # dwrs
 
-**dwrs** is a parallel file downloader with localization support, progress bars, and colorful output — written in Rust.
+**dwrs** is a parallel file downloader support, progress bars, and colorful output — written in Rust.
 It’s a fast, user-friendly alternative to tools like `wget`, designed for modern terminal workflows.
 
 ![GitHub release](https://img.shields.io/github/v/release/bircoder432/dwrs?style=flat-square)
@@ -13,7 +13,6 @@ It’s a fast, user-friendly alternative to tools like `wget`, designed for mode
 
 - 🚀 Parallel downloads (`--workers`)
 - 📄 Supports download lists from file
-- 🌐 Localized interface (English & Russian)
 - 📦 Colorful terminal output and progress bars
 - 🔄 `--continue` flag for resuming interrupted downloads
 - 🔧 Lightweight and fast, built in pure Rust
@@ -114,18 +113,7 @@ Resume an interrupted download:
 dwrs --url https://example.com/large_file.zip --continue
 ```
 
----
 
-## 🌍 Localization
-
-`dwrs` detects your system language and displays messages accordingly.
-
-Supported languages:
-
-* English (`en`)
-* Russian (`ru`)
-
-Localization is powered by [`rust-i18n`](https://github.com/longbridgeapp/rust-i18n).
 
 ---
 

@@ -1,8 +1,3 @@
-#[macro_use]
-extern crate rust_i18n;
-
-i18n!("locale", fallback = "en");
-
 use clap::Parser;
 use colored::Colorize;
 use dwrs::cli::Args;
@@ -32,6 +27,7 @@ async fn main() {
         template: cfg.template,
         chars: cfg.bar_chars,
         continue_download: args.continue_,
+        #[cfg(feature = "notify")]
         notify: args.notify,
     };
 
@@ -51,7 +47,7 @@ async fn main() {
                 .map(|(url, path)| (url, PathBuf::from(path)))
                 .collect(),
             Err(e) => {
-                eprintln!("{}: {}", t!("error-in-reading-file").red().bold(), e);
+                eprintln!("{}: {}", "Error in reading file".red().bold(), e);
                 return;
             }
         }
@@ -67,7 +63,7 @@ async fn main() {
         }
         if !args.output.is_empty() && args.output.len() != args.url.len() {
             error!("Error: number of output files does not match number of URLs");
-            eprintln!("{}", t!("error-count").red().bold());
+            eprintln!("{}", "Error: count mismatch".red().bold());
             return;
         }
         pairs

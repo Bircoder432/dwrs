@@ -23,7 +23,7 @@ pub fn create_progress_bar(
     let tokens = parse_template(msg_template);
 
     let vars: HashMap<&str, Cow<'_, str>> = HashMap::from([
-        ("download", Cow::Owned(t!("download").to_string())),
+        ("download", Cow::Owned("Downloading".to_string())),
         ("url", Cow::Borrowed(url)),
         ("output", Cow::Borrowed(output)),
     ]);

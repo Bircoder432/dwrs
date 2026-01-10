@@ -7,14 +7,8 @@
 //! - Resumable downloads (continue interrupted downloads)
 //! - Progress tracking with visual progress bars
 //! - Desktop notifications on completion/failure
-//! - Internationalization (i18n) support
 //! - File-based batch downloads
 //! - Background process support
-
-#[macro_use]
-extern crate rust_i18n;
-
-i18n!("i18n", fallback = "en");
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -22,6 +16,7 @@ pub mod cli;
 pub mod config;
 pub mod download;
 pub mod file_parser;
+#[cfg(feature = "notify")]
 pub mod notifications;
 pub mod progress;
 pub mod utils;
@@ -30,7 +25,6 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use indicatif::MultiProgress;
 use notify_rust::Notification;
 use reqwest::Client;
-use rust_i18n::t;
 use tokio::sync::Semaphore;
 use tokio::task;
 
@@ -45,6 +39,7 @@ pub struct DownloadConfig {
     /// Whether to resume interrupted downloads
     pub continue_download: bool,
     /// Whether to show desktop notifications
+    #[cfg(feature = "notify")]
     pub notify: bool,
     /// Template for progressbar
     pub template: String,
@@ -62,6 +57,7 @@ impl Default for DownloadConfig {
             msg_template: "{download} {url} → {output}".to_string(),
             chars: "█▌░".to_string(),
             continue_download: false,
+            #[cfg(feature = "notify")]
             notify: false,
         }
     }
@@ -173,19 +169,13 @@ impl Downloader {
 
                 match download_file(&client, &url, &output_path, &pb, resume, jobs).await {
                     Ok(_) => {
-                        pb.finish_with_message(format!(
-                            "{}: {}",
-                            t!("download-finish"),
-                            output_str
-                        ));
+                        pb.finish_with_message(format!("{}: {}", "Download Finished", output_str));
                         Ok(())
                     }
                     Err(e) => {
                         pb.finish_with_message(format!(
                             "{}: {}: {}",
-                            t!("download-error"),
-                            output_str,
-                            e
+                            "Download Error", output_str, e
                         ));
                         Err(e)
                     }
@@ -196,6 +186,7 @@ impl Downloader {
         while let Some(result) = tasks.next().await {
             let _ = result??;
         }
+        #[cfg(feature = "notify")]
         if self.config.notify {
             Notification::new()
                 .summary("Downloading end")

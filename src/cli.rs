@@ -3,13 +3,16 @@ use lazy_static::lazy_static;
 use std::path::PathBuf;
 
 lazy_static! {
-    static ref ABOUT_TEXT: String = rust_i18n::t!("about").to_string();
+    static ref ABOUT_TEXT: String =
+        "A utility for parallel downloading of files from the internet with a progress bar"
+            .to_string();
 }
 
 #[derive(Parser)]
 #[command(name = "dwrs", author, version, about = ABOUT_TEXT.as_str())]
 #[command(group(clap::ArgGroup::new("input").required(true).args(&["url","file"])))]
 pub struct Args {
+    #[cfg(feature = "notify")]
     #[arg(short, long)]
     pub notify: bool,
 
