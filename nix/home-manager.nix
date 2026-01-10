@@ -1,7 +1,6 @@
 {
   config,
   lib,
-  pkgs,
   ...
 }:
 
@@ -17,7 +16,7 @@ with lib;
       description = "dwrs package to use";
     };
     settings.msg_template = mkOption {
-      type = type.str;
+      type = types.str;
       default = "{download} {url} → {output}";
     };
     settings.template = mkOption {

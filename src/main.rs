@@ -7,9 +7,7 @@ use clap::Parser;
 use colored::Colorize;
 use dwrs::cli::Args;
 use dwrs::config::Config;
-use dwrs::{Downloader, init, notify_send};
-use futures::StreamExt;
-use futures::stream::FuturesUnordered;
+use dwrs::{Downloader, init};
 use log::{error, info};
 use std::path::PathBuf;
 

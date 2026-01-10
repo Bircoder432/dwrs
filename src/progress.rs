@@ -1,4 +1,3 @@
-use colored::Colorize;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
 use std::{borrow::Cow, collections::HashMap};

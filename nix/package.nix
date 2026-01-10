@@ -1,7 +1,6 @@
 {
   lib,
   naersk,
-  stdenv,
   pkg-config,
   openssl,
 }:

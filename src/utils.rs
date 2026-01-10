@@ -60,7 +60,7 @@ pub fn render(tokens: &[Token], vars: &HashMap<&str, Cow<'_, str>>) -> String {
     out
 }
 
-fn apply_color(mut value: &str, style: Option<&str>) -> String {
+fn apply_color(value: &str, style: Option<&str>) -> String {
     if style.is_none() {
         return value.to_string();
     }

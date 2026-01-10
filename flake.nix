@@ -11,11 +11,9 @@
 
   outputs =
     {
-      self,
       nixpkgs,
       flake-utils,
       naersk,
-      home-manager,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (

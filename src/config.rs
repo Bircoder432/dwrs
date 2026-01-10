@@ -1,7 +1,5 @@
-use std::fs;
-use std::path::Path;
-
 use serde::{Deserialize, Serialize};
+use std::fs;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigFile {
