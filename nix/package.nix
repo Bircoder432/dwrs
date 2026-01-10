@@ -18,14 +18,6 @@ naersk.buildPackage {
     openssl
   ];
 
-  # cargoBuildOptions =
-  #   opts:
-  #   opts
-  #   ++ [
-  #     "--bin"
-  #     "dwrs"
-  #   ];
-
   meta = with lib; {
     description = "Parallel file downloader with progress bar and i18n";
     homepage = "https://github.com/Bircoder432/dwrs";
