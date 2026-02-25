@@ -196,7 +196,7 @@ async fn download_parallel(
         std::cmp::max(1, (total_size / MIN_CHUNK_SIZE) as usize),
     );
 
-    let chunk_size = (total_size + optimal_workers as u64 - 1) / optimal_workers as u64;
+    let chunk_size = total_size.div_ceil(optimal_workers as u64);
     log::info!(
         "Parallel download: {} chunks, {} bytes each",
         optimal_workers,

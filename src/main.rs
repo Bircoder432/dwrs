@@ -88,7 +88,7 @@ async fn main() {
             let output = if let Some(path) = args.output.get(i) {
                 PathBuf::from(path)
             } else {
-                PathBuf::from(url.split('/').last().unwrap_or("file.bin"))
+                PathBuf::from(url.split('/').next_back().unwrap_or("file.bin"))
             };
             pairs.push((url.clone(), output));
         }

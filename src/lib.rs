@@ -404,22 +404,16 @@ impl Downloader {
                     log::error!("Attempt {} failed for {}: {}", attempt + 1, url, e);
                     last_error = Some(e);
 
-                    if attempt == 0 && output_path.exists() {
-                        if let Ok(meta) = tokio::fs::metadata(&output_path).await {
-                            if let Ok(head) = self.client.head(url).send().await {
-                                if let Some(len) =
+                    if attempt == 0 && output_path.exists()
+                        && let Ok(meta) = tokio::fs::metadata(&output_path).await
+                            && let Ok(head) = self.client.head(url).send().await
+                                && let Some(len) =
                                     head.headers().get(reqwest::header::CONTENT_LENGTH)
-                                {
-                                    if let Ok(total) = len.to_str().unwrap_or("0").parse::<u64>() {
-                                        if meta.len() == total {
+                                    && let Ok(total) = len.to_str().unwrap_or("0").parse::<u64>()
+                                        && meta.len() == total {
                                             log::info!("File already complete, skipping: {}", url);
                                             return Ok(());
                                         }
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -449,7 +443,7 @@ impl Downloader {
         let result = download::download_file(
             &self.client,
             url,
-            &output_path,
+            output_path,
             &pb,
             self.config.continue_download,
             self.config.workers,

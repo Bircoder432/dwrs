@@ -19,7 +19,7 @@ pub fn parse_template(input: &str) -> Vec<Token> {
             }
 
             let mut inner = String::new();
-            while let Some(n) = chars.next() {
+            for n in chars.by_ref() {
                 if n == '}' {
                     break;
                 }
