@@ -1,6 +1,7 @@
 use colored::Colorize;
 use std::{borrow::Cow, collections::HashMap};
 
+#[derive(Debug, Clone)]
 pub enum Token {
     Text(String),
     Var { name: String, color: Option<String> },
@@ -26,10 +27,12 @@ pub fn parse_template(input: &str) -> Vec<Token> {
             }
 
             let mut parts = inner.splitn(2, ':');
-            let name = parts.next().unwrap().to_string();
-            let color = parts.next().map(|c| c.to_string());
+            let name = parts.next().unwrap_or("").trim().to_string();
+            let color = parts.next().map(|c| c.trim().to_string());
 
-            out.push(Token::Var { name, color });
+            if !name.is_empty() {
+                out.push(Token::Var { name, color });
+            }
         } else {
             buf.push(c);
         }
@@ -52,6 +55,8 @@ pub fn render(tokens: &[Token], vars: &HashMap<&str, Cow<'_, str>>) -> String {
                 if let Some(value) = vars.get(name.as_str()) {
                     let colored = apply_color(value, color.as_deref());
                     out.push_str(&colored);
+                } else {
+                    out.push_str(&format!("{{{}}}", name));
                 }
             }
         }
@@ -61,24 +66,63 @@ pub fn render(tokens: &[Token], vars: &HashMap<&str, Cow<'_, str>>) -> String {
 }
 
 fn apply_color(value: &str, style: Option<&str>) -> String {
-    if style.is_none() {
-        return value.to_string();
-    }
+    let style = match style {
+        Some(s) => s,
+        None => return value.to_string(),
+    };
 
     let mut styled = value.normal();
 
-    for s in style.unwrap().split(',') {
+    for s in style.split(',') {
         styled = match s.trim() {
             "red" => styled.red(),
             "green" => styled.green(),
             "yellow" => styled.yellow(),
             "blue" => styled.blue(),
+            "magenta" => styled.magenta(),
+            "cyan" => styled.cyan(),
+            "white" => styled.white(),
             "bold" => styled.bold(),
-            "dim" => styled.dimmed(),
+            "dim" | "dimmed" => styled.dimmed(),
             "underline" => styled.underline(),
+            "italic" => styled.italic(),
+            "blink" => styled.blink(),
             _ => styled,
         };
     }
 
     styled.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_simple() {
+        let tokens = parse_template("Hello {name}!");
+        assert_eq!(tokens.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_with_color() {
+        let tokens = parse_template("{name:red,bold}");
+        match &tokens[0] {
+            Token::Var { name, color } => {
+                assert_eq!(name, "name");
+                assert_eq!(color.as_deref(), Some("red,bold"));
+            }
+            _ => panic!("Expected Var token"),
+        }
+    }
+
+    #[test]
+    fn test_render() {
+        let tokens = parse_template("Hello {name}!");
+        let mut vars = HashMap::new();
+        vars.insert("name", Cow::Borrowed("World"));
+
+        let result = render(&tokens, &vars);
+        assert_eq!(result, "Hello World!");
+    }
 }

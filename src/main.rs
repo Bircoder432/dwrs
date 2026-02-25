@@ -1,3 +1,4 @@
+// src/main.rs
 use clap::Parser;
 use colored::Colorize;
 use dwrs::cli::Args;
@@ -13,30 +14,60 @@ async fn main() {
 
     let args = Args::parse();
     let mut cfg = Config::load_from_config_dir();
-    if args.config.is_some() {
-        cfg = Config::load(&args.config.unwrap());
+
+    if let Some(config_path) = args.config {
+        cfg = Config::load(&config_path);
     }
 
-    let mut workers = cfg.workers;
-    if args.workers != 1 {
-        workers = args.workers;
-    }
+    let workers = if args.workers != 4 {
+        args.workers
+    } else {
+        cfg.workers
+    };
+    let buffer_size = args
+        .buffer_size
+        .map(|kb| kb * 1024)
+        .unwrap_or(cfg.buffer_size);
+    let pool_size = if args.pool_size != 100 {
+        args.pool_size
+    } else {
+        cfg.pool_size
+    };
+    let retries = if args.retries != 3 {
+        args.retries
+    } else {
+        cfg.retries
+    };
+    let min_parallel_size = if args.min_parallel_size != 5 {
+        args.min_parallel_size * 1024 * 1024
+    } else {
+        cfg.min_parallel_size
+    };
+
     let download_config = dwrs::DownloadConfig {
-        workers: workers,
+        workers,
         msg_template: cfg.msg_template,
         template: cfg.template,
         chars: cfg.bar_chars,
         continue_download: args.continue_,
         #[cfg(feature = "notify")]
         notify: args.notify,
+        buffer_size,
+        pool_size,
+        retries,
+        min_parallel_size,
+        max_concurrent_files: args.max_files,
     };
 
     let downloader = Downloader::new(download_config);
 
     if args.background {
+        #[cfg(feature = "notify")]
         if let Err(e) = dwrs::spawn_background_process() {
             error!("Failed to spawn background process: {}", e);
         }
+        #[cfg(not(feature = "notify"))]
+        error!("Background mode requires 'notify' feature");
         return;
     }
 
@@ -47,8 +78,8 @@ async fn main() {
                 .map(|(url, path)| (url, PathBuf::from(path)))
                 .collect(),
             Err(e) => {
-                eprintln!("{}: {}", "Error in reading file".red().bold(), e);
-                return;
+                eprintln!("{}: {}", "Error reading file".red().bold(), e);
+                std::process::exit(1);
             }
         }
     } else {
@@ -61,20 +92,34 @@ async fn main() {
             };
             pairs.push((url.clone(), output));
         }
+
         if !args.output.is_empty() && args.output.len() != args.url.len() {
             error!("Error: number of output files does not match number of URLs");
             eprintln!("{}", "Error: count mismatch".red().bold());
-            return;
+            std::process::exit(1);
         }
         pairs
     };
+
+    if downloads.is_empty() {
+        eprintln!("{}", "No downloads to process".red().bold());
+        std::process::exit(1);
+    }
+
+    info!("Starting {} download(s)", downloads.len());
 
     let downloads_refs: Vec<(&str, PathBuf)> = downloads
         .iter()
         .map(|(url, path)| (url.as_str(), path.clone()))
         .collect();
 
-    if let Err(e) = downloader.download_multiple(downloads_refs).await {
-        error!("Error during downloads: {}", e);
+    match downloader.download_multiple(downloads_refs).await {
+        Ok(_) => {
+            info!("All downloads completed successfully");
+        }
+        Err(e) => {
+            error!("Error during downloads: {}", e);
+            std::process::exit(1);
+        }
     }
 }

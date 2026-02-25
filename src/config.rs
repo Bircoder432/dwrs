@@ -7,14 +7,22 @@ struct ConfigFile {
     pub template: Option<String>,
     pub bar_chars: Option<String>,
     pub workers: Option<usize>,
+    pub buffer_size: Option<usize>,
+    pub pool_size: Option<usize>,
+    pub retries: Option<usize>,
+    pub min_parallel_size: Option<u64>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub msg_template: String,
     pub template: String,
     pub bar_chars: String,
     pub workers: usize,
+    pub buffer_size: usize,
+    pub pool_size: usize,
+    pub retries: usize,
+    pub min_parallel_size: u64,
 }
 
 impl Config {
@@ -27,6 +35,10 @@ impl Config {
                 template: None,
                 bar_chars: None,
                 workers: None,
+                buffer_size: None,
+                pool_size: None,
+                retries: None,
+                min_parallel_size: None,
             });
         let default = Self::default();
         Self {
@@ -34,6 +46,12 @@ impl Config {
             template: config_file.template.unwrap_or(default.template),
             bar_chars: config_file.bar_chars.unwrap_or(default.bar_chars),
             workers: config_file.workers.unwrap_or(default.workers),
+            buffer_size: config_file.buffer_size.unwrap_or(default.buffer_size),
+            pool_size: config_file.pool_size.unwrap_or(default.pool_size),
+            retries: config_file.retries.unwrap_or(default.retries),
+            min_parallel_size: config_file
+                .min_parallel_size
+                .unwrap_or(default.min_parallel_size),
         }
     }
 
@@ -52,7 +70,11 @@ impl Config {
             msg_template: "{download} {url} → {output}".to_string(),
             template: "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} ({percent}%) {msg}".to_string(),
             bar_chars: "█▌░".to_string(),
-            workers: 1,
+            workers: 4,
+            buffer_size: 256 * 1024,
+            pool_size: 100,
+            retries: 3,
+            min_parallel_size: 5 * 1024 * 1024,
         }
     }
 }
