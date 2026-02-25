@@ -404,16 +404,17 @@ impl Downloader {
                     log::error!("Attempt {} failed for {}: {}", attempt + 1, url, e);
                     last_error = Some(e);
 
-                    if attempt == 0 && output_path.exists()
+                    if attempt == 0
+                        && output_path.exists()
                         && let Ok(meta) = tokio::fs::metadata(&output_path).await
-                            && let Ok(head) = self.client.head(url).send().await
-                                && let Some(len) =
-                                    head.headers().get(reqwest::header::CONTENT_LENGTH)
-                                    && let Ok(total) = len.to_str().unwrap_or("0").parse::<u64>()
-                                        && meta.len() == total {
-                                            log::info!("File already complete, skipping: {}", url);
-                                            return Ok(());
-                                        }
+                        && let Ok(head) = self.client.head(url).send().await
+                        && let Some(len) = head.headers().get(reqwest::header::CONTENT_LENGTH)
+                        && let Ok(total) = len.to_str().unwrap_or("0").parse::<u64>()
+                        && meta.len() == total
+                    {
+                        log::info!("File already complete, skipping: {}", url);
+                        return Ok(());
+                    }
                 }
             }
         }
@@ -430,6 +431,8 @@ impl Downloader {
         url: &str,
         output_path: &PathBuf,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        use download::DownloadOptions;
+
         let mp = Arc::new(MultiProgress::new());
         let pb = progress::create_progress_bar(
             &mp,
@@ -440,17 +443,18 @@ impl Downloader {
             output_path.to_str().unwrap_or("file"),
         );
 
-        let result = download::download_file(
-            &self.client,
+        let opts = DownloadOptions {
+            client: &self.client,
             url,
-            output_path,
-            &pb,
-            self.config.continue_download,
-            self.config.workers,
-            self.config.buffer_size,
-            self.config.min_parallel_size,
-        )
-        .await;
+            output: output_path,
+            pb: &pb,
+            resume: self.config.continue_download,
+            workers: self.config.workers,
+            buffer_size: self.config.buffer_size,
+            min_parallel_size: self.config.min_parallel_size,
+        };
+
+        let result = download::download_file(opts).await;
 
         #[cfg(feature = "notify")]
         if self.config.notify {
@@ -514,6 +518,8 @@ impl Downloader {
         &self,
         downloads: Vec<(&str, PathBuf)>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        use download::DownloadOptions;
+
         if downloads.is_empty() {
             log::warn!("No downloads to process");
             return Ok(());
@@ -523,10 +529,7 @@ impl Downloader {
         let mp = Arc::new(MultiProgress::new());
 
         let max_concurrent = self.config.max_concurrent_files.unwrap_or_else(|| {
-            let calculated = std::cmp::min(
-                8,
-                std::cmp::max(1, 16 / std::cmp::max(1, self.config.workers)),
-            );
+            let calculated = (16 / std::cmp::max(1, self.config.workers)).clamp(1, 8);
             log::debug!("Auto-calculated max_concurrent_files: {}", calculated);
             calculated
         });
@@ -558,17 +561,18 @@ impl Downloader {
                     &output_path.to_string_lossy(),
                 );
 
-                let result = download::download_file(
-                    &client,
-                    &url_owned,
-                    &output_path,
-                    &pb,
-                    config.continue_download,
-                    config.workers,
-                    config.buffer_size,
-                    config.min_parallel_size,
-                )
-                .await;
+                let opts = DownloadOptions {
+                    client: &client,
+                    url: &url_owned,
+                    output: &output_path,
+                    pb: &pb,
+                    resume: config.continue_download,
+                    workers: config.workers,
+                    buffer_size: config.buffer_size,
+                    min_parallel_size: config.min_parallel_size,
+                };
+
+                let result = download::download_file(opts).await;
 
                 match result {
                     Ok(_) => {
@@ -641,9 +645,9 @@ impl Downloader {
     ///
     /// ```text
     /// # Comments start with #
-    /// https://example.com/file1.zip output1.zip
+    /// https://example.com/file1.zip  output1.zip
     /// https://example.com/file2.zip
-    /// https://example.com/file3.zip output3.zip
+    /// https://example.com/file3.zip  output3.zip
     /// ```
     ///
     /// When output name is omitted, it's derived from the URL path.

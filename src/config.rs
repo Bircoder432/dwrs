@@ -64,8 +64,10 @@ impl Config {
         log::warn!("Config dir not found, using default config");
         Self::default()
     }
+}
 
-    pub fn default() -> Self {
+impl Default for Config {
+    fn default() -> Self {
         Self {
             msg_template: "{download} {url} → {output}".to_string(),
             template: "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} ({percent}%) {msg}".to_string(),

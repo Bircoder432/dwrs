@@ -10,16 +10,32 @@ const DEFAULT_BUFFER_SIZE: usize = 256 * 1024;
 const STREAM_CHUNK_SIZE: usize = 64 * 1024;
 const MIN_CHUNK_SIZE: u64 = 2 * 1024 * 1024;
 
+/// Options for downloading a file
+pub struct DownloadOptions<'a> {
+    pub client: &'a Client,
+    pub url: &'a str,
+    pub output: &'a Path,
+    pub pb: &'a ProgressBar,
+    pub resume: bool,
+    pub workers: usize,
+    pub buffer_size: usize,
+    pub min_parallel_size: u64,
+}
+
 pub async fn download_file(
-    client: &Client,
-    url: &str,
-    output: &PathBuf,
-    pb: &ProgressBar,
-    resume: bool,
-    workers: usize,
-    buffer_size: usize,
-    min_parallel_size: u64,
+    opts: DownloadOptions<'_>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let DownloadOptions {
+        client,
+        url,
+        output,
+        pb,
+        resume,
+        workers,
+        buffer_size,
+        min_parallel_size,
+    } = opts;
+
     log::debug!("Starting download: {} -> {}", url, output.display());
 
     let head_resp = match client.head(url).send().await {
@@ -76,7 +92,8 @@ pub async fn download_file(
         url,
         workers
     );
-    download_parallel(
+
+    let opts = ParallelOptions {
         client,
         url,
         output,
@@ -85,8 +102,8 @@ pub async fn download_file(
         total_size,
         workers,
         buffer_size,
-    )
-    .await
+    };
+    download_parallel(opts).await
 }
 
 async fn download_optimized(
@@ -181,16 +198,32 @@ async fn download_optimized(
     Ok(())
 }
 
-async fn download_parallel(
-    client: &Client,
-    url: &str,
-    output: &PathBuf,
-    pb: &ProgressBar,
+/// Options for parallel download
+struct ParallelOptions<'a> {
+    client: &'a Client,
+    url: &'a str,
+    output: &'a Path,
+    pb: &'a ProgressBar,
     resume: bool,
     total_size: u64,
     workers: usize,
     buffer_size: usize,
+}
+
+async fn download_parallel(
+    opts: ParallelOptions<'_>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let ParallelOptions {
+        client,
+        url,
+        output,
+        pb,
+        resume,
+        total_size,
+        workers,
+        buffer_size,
+    } = opts;
+
     let optimal_workers = std::cmp::min(
         workers,
         std::cmp::max(1, (total_size / MIN_CHUNK_SIZE) as usize),
@@ -224,20 +257,21 @@ async fn download_parallel(
 
         log::debug!("Spawning chunk {}: bytes {}-{}", i, start, end);
 
-        handles.push(tokio::spawn(async move {
-            download_chunk(
-                &client,
-                &url,
-                &tmp_path,
-                start,
-                end,
-                resume,
-                pb_clone,
-                progress,
-                buffer_size,
-            )
-            .await
-        }));
+        let chunk_opts = ChunkOptions {
+            client,
+            url,
+            tmp_path,
+            start,
+            end,
+            resume,
+            pb: pb_clone,
+            progress,
+            buffer_size,
+        };
+
+        handles.push(tokio::spawn(
+            async move { download_chunk(chunk_opts).await },
+        ));
     }
 
     let mut parts = Vec::with_capacity(handles.len());
@@ -272,22 +306,39 @@ async fn download_parallel(
     Ok(())
 }
 
-async fn download_chunk(
-    client: &Client,
-    url: &str,
-    tmp_path: &Path,
+/// Options for downloading a chunk
+struct ChunkOptions {
+    client: Client,
+    url: String,
+    tmp_path: PathBuf,
     start: u64,
     end: u64,
     resume: bool,
     pb: Arc<ProgressBar>,
     progress: Arc<AtomicU64>,
     buffer_size: usize,
+}
+
+async fn download_chunk(
+    opts: ChunkOptions,
 ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+    let ChunkOptions {
+        client,
+        url,
+        tmp_path,
+        start,
+        end,
+        resume,
+        pb,
+        progress,
+        buffer_size,
+    } = opts;
+
     let chunk_size = end.saturating_sub(start) + 1;
     let mut current_start = start;
 
     if resume && tmp_path.exists() {
-        match fs::metadata(tmp_path).await {
+        match fs::metadata(&tmp_path).await {
             Ok(meta) => {
                 let existing = meta.len();
                 if existing > 0 && existing < chunk_size {
@@ -295,28 +346,28 @@ async fn download_chunk(
                     log::debug!("Resuming chunk from byte {}", current_start);
                 } else if existing >= chunk_size {
                     log::debug!("Chunk already complete: {}", tmp_path.display());
-                    return Ok(tmp_path.to_path_buf());
+                    return Ok(tmp_path);
                 } else {
-                    fs::remove_file(tmp_path).await.ok();
+                    fs::remove_file(&tmp_path).await.ok();
                 }
             }
             Err(_) => {
-                fs::remove_file(tmp_path).await.ok();
+                fs::remove_file(&tmp_path).await.ok();
             }
         }
     }
 
     let request = client
-        .get(url)
+        .get(&url)
         .header("Range", format!("bytes={}-{}", current_start, end))
         .send()
         .await?
         .error_for_status()?;
 
     let file = if resume && current_start > start && tmp_path.exists() {
-        fs::OpenOptions::new().append(true).open(tmp_path).await?
+        fs::OpenOptions::new().append(true).open(&tmp_path).await?
     } else {
-        fs::File::create(tmp_path).await?
+        fs::File::create(&tmp_path).await?
     };
 
     let mut writer = tokio::io::BufWriter::with_capacity(
@@ -335,7 +386,7 @@ async fn download_chunk(
     }
 
     writer.flush().await?;
-    Ok(tmp_path.to_path_buf())
+    Ok(tmp_path)
 }
 
 async fn merge_parts(

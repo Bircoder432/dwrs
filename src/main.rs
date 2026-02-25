@@ -1,4 +1,3 @@
-// src/main.rs
 use clap::Parser;
 use colored::Colorize;
 use dwrs::cli::Args;
