@@ -83,9 +83,10 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Rename binary (add target suffix)
+        shell: bash
         run: |
-          mkdir dist
-          cp target/${{ matrix.target }}/release/${{ matrix.binary }} dist/${{ matrix.binary }}-${{ matrix.target }}
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.binary }} "dist/${{ matrix.binary }}-${{ matrix.target }}"
 
       - name: Upload
         uses: softprops/action-gh-release@v2
