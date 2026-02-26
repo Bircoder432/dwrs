@@ -42,7 +42,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build Release
-        run: cargo build --release --target ${{ matix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare Binary
         shell: bash
