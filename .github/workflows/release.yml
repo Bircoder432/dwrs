@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  worflow_dispatch:
   push:
     tags:
       - "*.*.*"
