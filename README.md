@@ -113,8 +113,6 @@ Resume an interrupted download:
 dwrs --url https://example.com/large_file.zip --continue
 ```
 
-
-
 ---
 
 ## 🤝 Contributing
