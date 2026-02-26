@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*.*.*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build & Upload dwrs
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary: dwrs
+            archive: dwrs-linux-x86_64.tar.gz
+          # macOS ARM
+          - os: macos-14
+            target: aarch64-apple-darwin
+            binary: dwrs
+            archive: dwrs-macos-arm64.tar.gz
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            binary: dwrs.exe
+            archive: dwrs-windows-x86_64.zip
+
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Linux зависимости
+      - name: Install Linux deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Build dwrs
+        run: cargo build --release --bin dwrs --target ${{ matrix.target }}
+
+      - name: Strip binary (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: strip target/${{ matrix.target }}/release/${{ matrix.binary }}
+
+      - name: Package binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ${{ matrix.archive }} ${{ matrix.binary }}
+
+      - name: Package binary (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          powershell Compress-Archive -Path ${{ matrix.binary }} -DestinationPath ${{ matrix.archive }}
+
+      - name: Ensure archive exists
+        run: |
+          if [ ! -f target/${{ matrix.target }}/release/${{ matrix.archive }} ]; then
+            echo "Binary missing!"
+            exit 1
+          fi
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: target/${{ matrix.target }}/release/${{ matrix.archive }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
