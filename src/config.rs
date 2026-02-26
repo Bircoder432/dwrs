@@ -56,6 +56,15 @@ impl Config {
     }
 
     pub fn load_from_config_dir() -> Self {
+        log::debug!(
+            "Loading config from: {}",
+            dirs::config_dir()
+                .unwrap_or_default()
+                .join("dwrs")
+                .join("config.toml")
+                .to_str()
+                .unwrap_or("")
+        );
         if let Some(mut path) = dirs::config_dir() {
             path.push("dwrs");
             path.push("config.toml");
@@ -69,8 +78,9 @@ impl Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            msg_template: "{download} {url} → {output}".to_string(),
-            template: "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} ({percent}%) {msg}".to_string(),
+            msg_template: "→ {output}".to_string(),
+            template: "{spinner:.green} [{elapsed_precise}] {bar:40.cyan/blue} ({percent}%) {msg}"
+                .to_string(),
             bar_chars: "█▌░".to_string(),
             workers: 4,
             buffer_size: 256 * 1024,
