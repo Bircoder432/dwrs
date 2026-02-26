@@ -4,6 +4,7 @@ on:
     tags:
       - '*.*.*'
   workflow_dispatch:
+  release: 
 env:
   CARGO_TERM_COLOR: always
   BINARY_NAME: dwrs
