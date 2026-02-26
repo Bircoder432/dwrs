@@ -1,88 +1,89 @@
 name: Release
-
 on:
-  worflow_dispatch:
   push:
     tags:
-      - "*.*.*"
-
+      - '*.*.*'
+  workflow_dispatch:
 env:
   CARGO_TERM_COLOR: always
+  BINARY_NAME: dwrs
 
 jobs:
-  release:
-    name: Build & Upload dwrs
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
     strategy:
-      fail-fast: false
       matrix:
+        os: [macos-14,ubuntu-latest,windows-latest]
         include:
-          # Linux
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            binary: dwrs
-            archive: dwrs-linux-x86_64.tar.gz
-          # macOS ARM
           - os: macos-14
             target: aarch64-apple-darwin
-            binary: dwrs
-            archive: dwrs-macos-arm64.tar.gz
-          # Windows
+            binary_suffix: -macos-arm64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_suffix: -linux-x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            binary: dwrs.exe
-            archive: dwrs-windows-x86_64.zip
-
-    runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write
-
+            binary_suffix: -windows-x86_64.exe
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Install Rust
+      - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      # Linux зависимости
-      - name: Install Linux deps
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev
-
-      - name: Build dwrs
-        run: cargo build --release --bin dwrs --target ${{ matrix.target }}
-
-      - name: Strip binary (Linux only)
-        if: matrix.os == 'ubuntu-latest'
-        run: strip target/${{ matrix.target }}/release/${{ matrix.binary }}
-
-      - name: Package binary (Unix)
-        if: matrix.os != 'windows-latest'
-        run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ${{ matrix.archive }} ${{ matrix.binary }}
-
-      - name: Package binary (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          cd target/${{ matrix.target }}/release
-          powershell Compress-Archive -Path ${{ matrix.binary }} -DestinationPath ${{ matrix.archive }}
-
-      - name: Ensure archive exists (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-            if (-Not (Test-Path "target/${{ matrix.target }}/release/${{ matrix.archive }}")) {
-            Write-Error "Binary missing!"
-            exit 1
-          }
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          files: target/${{ matrix.target }}/release/${{ matrix.archive }}
+          key: ${{ matrix.target }}
+
+      - name: Build Release
+        run: cargo build --release --target ${{ matix.target }}
+
+      - name: Prepare Binary
+        shell: bash
+        run: |
+          mkdir -p release-assets
+
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cp target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe \
+            release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
+          else
+            cp target/${{ matrix.target }}/release/${{ env.BINARY_NAME }} \
+            release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
+            chmod +x release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
+          fi
+          
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.os }}
+          path: release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
+          retention-days: 1
+  release:
+    name: Create Github Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      conents: write
+
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          merge-multiple: true
+          path: ./dist
+
+      - name: List files
+        run: ls -lh ./dist
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./dist/*
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          draft: false
