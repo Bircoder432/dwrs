@@ -69,7 +69,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      conents: write
+      contents: write
 
     steps:
       - name: Download All Artifacts
