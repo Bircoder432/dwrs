@@ -436,8 +436,8 @@ impl Downloader {
         let mp = Arc::new(MultiProgress::new());
         let pb = progress::create_progress_bar(
             &mp,
-            &self.config.msg_template,
             &self.config.template,
+            &self.config.msg_template,
             &self.config.chars,
             url,
             output_path.to_str().unwrap_or("file"),
