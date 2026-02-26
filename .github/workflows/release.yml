@@ -1,10 +1,15 @@
-name: Release
+name: Build & Upload Assets
+
 on:
-  push:
-    tags:
-      - '*.*.*'
+  release:
+    types: [published]
   workflow_dispatch:
-  release: 
+    inputs:
+      version:
+        description: 'Tag version (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
 env:
   CARGO_TERM_COLOR: always
   BINARY_NAME: dwrs
@@ -13,10 +18,9 @@ jobs:
   build:
     name: Build ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-
     strategy:
       matrix:
-        os: [macos-14,ubuntu-latest,windows-latest]
+        os: [macos-14, ubuntu-latest, windows-latest]
         include:
           - os: macos-14
             target: aarch64-apple-darwin
@@ -27,19 +31,15 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary_suffix: -windows-x86_64.exe
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
 
       - name: Build Release
         run: cargo build --release --target ${{ matrix.target }}
@@ -48,43 +48,37 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-assets
-
           if [ "${{ runner.os }}" == "Windows" ]; then
             cp target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.exe \
-            release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
+               release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
           else
             cp target/${{ matrix.target }}/release/${{ env.BINARY_NAME }} \
-            release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
+               release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
             chmod +x release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
           fi
-          
-      - name: Upload Binary Artifact
-        uses: actions/upload-artifact@v4
+
+      - uses: actions/upload-artifact@v4
         with:
           name: binary-${{ matrix.os }}
           path: release-assets/${{ env.BINARY_NAME }}${{ matrix.binary_suffix }}
           retention-days: 1
-  release:
-    name: Create Github Release
+
+  upload:
+    name: Upload to Release
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+    
     steps:
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           pattern: binary-*
           merge-multiple: true
           path: ./dist
 
-      - name: List files
-        run: ls -lh ./dist
-
-      - name: Create Release
+      - name: Upload Assets
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ github.event.release.tag_name || inputs.version }}
           files: ./dist/*
-          generate_release_notes: true
-          draft: false
